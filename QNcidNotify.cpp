@@ -1,8 +1,11 @@
 #include "QNcidNotify.h"
+#include "QNcidNotify.moc"
 
 #include <QtDBus/QDBusConnection>
 #include <QtGui/QVBoxLayout>
 #include <QtGui/QLabel>
+#include <QtGui/QIcon>
+#include <KDE/KIcon>
 
 QNcidNotify::QNcidNotify ( QObject *parent, const QVariantList &args ) : Plasma::PopupApplet ( parent, args )
 {
@@ -12,7 +15,7 @@ QNcidNotify::QNcidNotify ( QObject *parent, const QVariantList &args ) : Plasma:
 
 void QNcidNotify::init()
 {
-    setPopupIcon("package_telephone");
+    setPopupIcon(QIcon(KIcon("package_telephone").pixmap(22,22)));
 
     m_widget = new QWidget;
     QVBoxLayout *layout = new QVBoxLayout;
@@ -44,11 +47,11 @@ void QNcidNotify::parseLine ( QString line )
         // connected
     } else if ( line.startsWith ( "300" ) ) {
         // end of call log
-    } else if ( line.startsWith ( "CIDLOG" ) ) {
+    } else if ( line.startsWith ( "CIDLOG:" ) ) {
         // incomming call log
-    } else if ( line.startsWith ( "CIDINFO" ) ) {
+    } else if ( line.startsWith ( "CIDINFO:" ) ) {
         // ring ring
-    } else if ( line.startsWith ( "CID" ) ) {
+    } else if ( line.startsWith ( "CID:" ) ) {
         QVBoxLayout *layout = new QVBoxLayout;
         layout->setSizeConstraint ( QLayout::SetNoConstraint );
         m_widget->setLayout ( layout );
@@ -59,8 +62,6 @@ void QNcidNotify::parseLine ( QString line )
     } else {
         // not handeled
     }
-
 }
 
-
-#include "QNcidNotify.moc"
+K_EXPORT_PLASMA_APPLET ( qncidnotify, QNcidNotify )
