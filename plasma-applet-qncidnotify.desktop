@@ -1,0 +1,19 @@
+[Desktop Entry]
+Name=QNcidNotify
+Comment=Widget to display a notification for an incomming telephone call
+
+Type=Service
+Icon=emblem-important
+
+X-KDE-ServiceTypes=Plasma/Applet
+X-KDE-Library=plasma_applet_qncidnotify
+X-KDE-PluginInfo-Author=Thomas Zimmermann
+X-KDE-PluginInfo-Email=bugs@vdm-design.de
+X-KDE-PluginInfo-Name=qncidnotify
+X-KDE-PluginInfo-Version=0.1
+X-KDE-PluginInfo-Website=http://plasma.kde.org/
+X-KDE-PluginInfo-Category=
+X-KDE-PluginInfo-Depends=
+X-KDE-PluginInfo-License=GPL
+X-KDE-PluginInfo-EnabledByDefault=true
+
