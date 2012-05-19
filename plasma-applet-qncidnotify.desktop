@@ -3,7 +3,7 @@ Name=QNcidNotify
 Comment=Widget to display a notification for an incomming telephone call
 
 Type=Service
-Icon=package_telephone
+Icon=phone-icon
 
 X-KDE-ServiceTypes=Plasma/Applet
 X-KDE-Library=plasma_applet_qncidnotify

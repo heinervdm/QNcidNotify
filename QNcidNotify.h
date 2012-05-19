@@ -4,26 +4,35 @@
 #include <QtGui/QWidget>
 #include <QtNetwork/QTcpSocket>
 #include <QtCore/QString>
+#include <QtCore/QStringList>
+#include <QtCore/QDateTime>
+#include <QtGui/QSystemTrayIcon>
 
-#include <KDE/Plasma/PopupApplet>
-
-class QNcidNotify : public Plasma::PopupApplet
+class QNcidNotify : public QWidget
 {
     Q_OBJECT
 public:
-    QNcidNotify ( QObject *, const QVariantList & );
+    QNcidNotify ( QWidget *parent = 0 );
     virtual ~QNcidNotify();
-    QWidget *widget () {
-        return m_widget;
-    }
-public slots:
-      void init();
 private:
+    struct LogEntry {
+        QDateTime date;
+        QString callerId;
+        QString phoneLine;
+        QString msg;
+        QString name;
+    };
+    QList<LogEntry> *log;
+    QSystemTrayIcon *trayIcon;
     QWidget *m_widget;
     QTcpSocket *sock;
+    void parseCID(const QString line);
+    bool connected;
+    static QString logEntryToString(const LogEntry entry);
 private slots:
     void readData();
     void parseLine(QString line);
+    void showNotification(const QString msg, int timeout = -1);
 signals:
     void lineRead(QString line);
 };

@@ -18,14 +18,15 @@ set(DATADIR "${CMAKE_INSTALL_PREFIX}/share")
 
 configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
    
-set(QNcidNotify_SRCS QNcidNotify.cpp)
+set(QNcidNotify_SRCS main.cpp QNcidNotify.cpp)
+qt4_add_resources(QNcidNotify_RCC QNcidNotify.qrc)
 
 # Now make sure all files get to the right place
-kde4_add_plugin(plasma_applet_qncidnotify ${QNcidNotify_SRCS})
-target_link_libraries(plasma_applet_qncidnotify 
+add_executable(qncidnotify ${QNcidNotify_SRCS} ${QNcidNotify_RCC})
+target_link_libraries(qncidnotify 
                       ${KDE4_PLASMA_LIBS} ${KDE4_KDEUI_LIBS} ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY} ${QT_QTNETWORK_LIBRARY})
  
-install(TARGETS plasma_applet_qncidnotify
+install(TARGETS qncidnotify
         DESTINATION ${PLUGIN_INSTALL_DIR})
  
 install(FILES plasma-applet-qncidnotify.desktop
