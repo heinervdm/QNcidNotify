@@ -29,6 +29,7 @@ private:
     void parseCID(const QString line);
     bool connected;
     static QString logEntryToString(const LogEntry entry);
+    QString getCallerInfo(QString number);
 private slots:
     void readData();
     void parseLine(QString line);

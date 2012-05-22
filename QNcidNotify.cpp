@@ -10,6 +10,10 @@
 #include <QtCore/QDate>
 #include <QtCore/QTime>
 #include <QtCore/QDateTime>
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkRequest>
+#include <QtCore/QEventLoop>
 
 QNcidNotify::QNcidNotify ( QWidget *parent ) : QWidget ( parent ), connected(false)
 {
@@ -100,9 +104,20 @@ void QNcidNotify::parseCID(QString line)
 
 QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
 {
-  QString msg;
-  
-  return msg;
+    QString msg;
+    msg << tr("Number: ") << entry.callerId << endl() << tr("Time: ") << entry.date.toString();
+
+    return msg;
+}
+
+QString QNcidNotify::getCallerInfo(QString number)
+{
+    QNetworkAccessManager *networkMgr = new QNetworkAccessManager(this);
+    QNetworkReply *reply = networkMgr->get( QNetworkRequest( QUrl( "http://www.google.com" ) ) );
+    QEventLoop loop;
+    QObject::connect(reply, SIGNAL(readyRead()), &loop, SLOT(quit()));
+    loop.exec();
+    return reply->readAll();
 }
 
 
