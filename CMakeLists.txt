@@ -1,6 +1,6 @@
 project(QNcidNotify)
 cmake_minimum_required(VERSION 2.6)
-find_package(Qt4 REQUIRED)
+find_package(Qt4 COMPONENTS QtCore QtGui QtNetwork QtSql REQUIRED)
 
 # Find the required Libaries
 find_package(KDE4 REQUIRED)

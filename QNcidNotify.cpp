@@ -4,21 +4,31 @@
 #include "config.h"
 
 #include <QtDBus/QDBusInterface>
+
 #include <QtGui/QVBoxLayout>
 #include <QtGui/QLabel>
 #include <QtGui/QIcon>
+
 #include <QtCore/QDate>
 #include <QtCore/QTime>
 #include <QtCore/QDateTime>
+#include <QtCore/QEventLoop>
+
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkRequest>
-#include <QtCore/QEventLoop>
+
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlQuery>
 
 QNcidNotify::QNcidNotify ( QWidget *parent ) : QWidget ( parent ), connected(false)
 {
+    ncidHostIP = "192.168.1.1";
+    ncidHostPort = 3333;
+    lookupUrl = "";
+
     sock = new QTcpSocket;
-    sock->connectToHost ( "192.168.1.1", 3333, QIODevice::ReadOnly );
+    sock->connectToHost (ncidHostIP, ncidHostPort, QIODevice::ReadOnly );
 
     log = new QList<LogEntry>();
 
@@ -36,6 +46,9 @@ QNcidNotify::~QNcidNotify()
     if ( sock->isOpen() ) sock->disconnectFromHost();
 }
 
+/**
+ * reads one line from the ncid server
+ */
 void QNcidNotify::readData()
 {
     int size = 1024;
@@ -44,6 +57,12 @@ void QNcidNotify::readData()
     emit lineRead ( QString ( data ) );
 }
 
+/**
+ * Checks for type of line recived from ncid server and hands
+ * it over to the line specific parsing function.
+ * 
+ * @param line The line to parse
+ */
 void QNcidNotify::parseLine ( QString line )
 {
     line = line.simplified();
@@ -63,8 +82,14 @@ void QNcidNotify::parseLine ( QString line )
     }
 }
 
-// CID: *DATE*18052012*TIME*1743*LINE*026322046391*NMBR*017691314331*MESG*NONE*NAME*NO NAME*
-// CIDLOG: *DATE*11052012*TIME*1331*LINE*026322046391*NMBR*Anonym*MESG*NONE*NAME*NO NAME*
+
+/**
+ * Parses CID and CIDLOG lines with the following format:
+ * CID: *DATE*18052012*TIME*1743*LINE*0123456789*NMBR*0987654321*MESG*NONE*NAME*NO NAME*
+ * CIDLOG: *DATE*11052012*TIME*1331*LINE*0123456789*NMBR*Anonym*MESG*NONE*NAME*NO NAME*
+ * 
+ * @param line The line to parse
+ */
 void QNcidNotify::parseCID(QString line)
 {
     LogEntry entry;
@@ -99,9 +124,15 @@ void QNcidNotify::parseCID(QString line)
 
     qDebug() << "parseCID(): Number:" << entry.callerId << "Time:" << entry.date.toString();
 
-    if (line.startsWith("CID:",Qt::CaseInsensitive)) showNotification(line);
+    if (line.startsWith("CID:",Qt::CaseInsensitive)) showNotification(getCallerInfo(entry));
 }
 
+/**
+ * Converts the LogEntry struct into a string
+ * 
+ * @param entry The log entry
+ * @return the generated string
+ */
 QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
 {
     QString msg;
@@ -110,17 +141,59 @@ QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
     return msg;
 }
 
-QString QNcidNotify::getCallerInfo(QString number)
+/**
+ * Generate the Notification text the the log entry
+ *  * If the notification text for the number is already cached
+ *    in the sqlite database, the cached version is used.
+ *  * If no cached version is found but an url to look the text found 
+ *    is given in the configuration, the text is recived from this webpage.
+ *  * If no cache exists and no url is given the notification is generated
+ *    by lotEntryToString()
+ * 
+ * @param entry the log entry
+ * @return the notification text
+ */
+QString QNcidNotify::getCallerInfo(LogEntry entry)
 {
-    QNetworkAccessManager *networkMgr = new QNetworkAccessManager(this);
-    QNetworkReply *reply = networkMgr->get( QNetworkRequest( QUrl( "http://www.google.com" ) ) );
-    QEventLoop loop;
-    QObject::connect(reply, SIGNAL(readyRead()), &loop, SLOT(quit()));
-    loop.exec();
-    return reply->readAll();
+    QString callerInfo;
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName("test.db");
+    if (!db.open()) return NULL;
+    QSqlQuery query;
+    query.exec("CREATE TABLE IF NOT EXISTS numbercache (number TEXT PRIMARY KEY, notification TEXT NOT NULL)");
+    query.prepare("SELECT notification FROM numbercache WHERE number=?;");
+    query.addBindValue(entry.callerId);
+    query.exec();
+    if (query.first()) {
+        callerInfo = query.value(0).toString();
+    }
+    else if (!lookupUrl.isEmpty()) {
+        QNetworkAccessManager *networkMgr = new QNetworkAccessManager(this);
+        QNetworkReply *reply = networkMgr->get( QNetworkRequest( QUrl( lookupUrl + entry.callerId) ) );
+        QEventLoop loop;
+        QObject::connect(reply, SIGNAL(readyRead()), &loop, SLOT(quit()));
+        loop.exec();
+        callerInfo = QString(reply->readAll().data());
+        if (callerInfo.isEmpty()) callerInfo = logEntryToString(entry);
+        query.prepare("INSERT INTO numbercache (number, notification) VALUES(?,?)");
+        query.addBindValue(entry.callerId);
+        query.addBindValue(callerInfo);
+        query.exec();
+    }
+    else {
+        callerInfo = logEntryToString(entry);
+    }
+    db.close();
+    return callerInfo;
 }
 
-
+/**
+ * Shows a notification using the freedesktop.org DBus notification API
+ * 
+ * @param msg the message to show
+ * @param timeout time to display the notification
+ *                (if -1 the timeout is given by the window system)
+ */
 void QNcidNotify::showNotification(QString msg, int timeout)
 {
     qDebug() << "showNotification():" << msg;
@@ -141,42 +214,3 @@ void QNcidNotify::showNotification(QString msg, int timeout)
     args << timeout;
     notify.callWithArgumentList(QDBus::Block, "Notify", args);
 }
-/*
-static void QNcidNotify::showNotification(char *text)
-{
-	DBusGConnection* dbus_conn;
-	DBusGProxy *dbus_proxy;
-
-	dbus_conn = dbus_g_bus_get(DBUS_BUS_SESSION, NULL);
-	dbus_proxy = dbus_g_proxy_new_for_name(dbus_conn,
-					"org.freedesktop.Notifications",
-					"/org/freedesktop/Notifications",
-					"org.freedesktop.Notifications");
-
-	if (dbus_proxy != NULL) {
-		GArray *actions = g_array_sized_new(TRUE, FALSE,
-						    sizeof(gchar *), 0);
-		GHashTable *hints = g_hash_table_new_full(g_str_hash,
-						g_str_equal, g_free, g_free);
-
-		dbus_g_proxy_call_no_reply(dbus_proxy, "Notify",
-					G_TYPE_STRING, PACKAGE,
-					G_TYPE_UINT, 0,
-					G_TYPE_STRING, "quassel",
-					G_TYPE_STRING, "Eingehender Anruf",
-					G_TYPE_STRING, text,
-					G_TYPE_STRV,
-					(gchar **)g_array_free(actions, FALSE),
-					dbus_g_type_get_map("GHashTable",
-							    G_TYPE_STRING,
-							    G_TYPE_VALUE),
-					   hints,
-					G_TYPE_INT, -1,
-					G_TYPE_INVALID);
-
-		g_hash_table_destroy(hints);
-	}
-	g_object_unref(dbus_proxy);
-	dbus_g_connection_unref(dbus_conn);
-}
-*/

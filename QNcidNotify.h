@@ -26,6 +26,9 @@ private:
     QSystemTrayIcon *trayIcon;
     QWidget *m_widget;
     QTcpSocket *sock;
+    QString lookupUrl;
+    QString ncidHostIP;
+    int ncidHostPort;
     void parseCID(const QString line);
     bool connected;
     static QString logEntryToString(const LogEntry entry);
