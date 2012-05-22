@@ -136,7 +136,7 @@ void QNcidNotify::parseCID(QString line)
 QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
 {
     QString msg;
-    msg << tr("Number: ") << entry.callerId << endl() << tr("Time: ") << entry.date.toString();
+    msg = tr("Number: ") + entry.callerId + "<br>" + tr("Time: ") + entry.date.toString();
 
     return msg;
 }
@@ -153,7 +153,7 @@ QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
  * @param entry the log entry
  * @return the notification text
  */
-QString QNcidNotify::getCallerInfo(LogEntry entry)
+QString QNcidNotify::getCallerInfo(const QNcidNotify::LogEntry entry)
 {
     QString callerInfo;
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
