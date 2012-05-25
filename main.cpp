@@ -1,5 +1,7 @@
 #include "QNcidNotify.h"
 
+#include <QtCore/QObject>
+
 #include <QtGui/QMessageBox>
 #include <QtGui/QApplication>
 #include <QtGui/QSystemTrayIcon>
@@ -16,9 +18,14 @@
                                            "on this system."));
          return 1;
      }
+     QApplication::setOrganizationName("vdm-design.de");
+     QApplication::setOrganizationName("vdm-design.de");
+     QApplication::setApplicationName("QNcidNotify");
+     QApplication::setApplicationVersion("0.1");
      QApplication::setQuitOnLastWindowClosed(false);
 
      QNcidNotify window;
-     window.show();
+     QObject::connect(&window, SIGNAL(quit()), &app, SLOT(quit()));
+
      return app.exec();
  }

@@ -1,13 +1,34 @@
+/*
+    QNcidNotify - A Qt ncid (Network Caller ID) application
+    Copyright (C) 2012  Thomas Zimmermann <bugs@vdm-design.de>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include "QNcidNotify.h"
 #include "QNcidNotify.moc"
 
 #include "config.h"
+#include "QNcidNotifyOptions.h"
 
 #include <QtDBus/QDBusInterface>
 
 #include <QtGui/QVBoxLayout>
 #include <QtGui/QLabel>
 #include <QtGui/QIcon>
+#include <QtGui/QAction>
+#include <QtGui/QMessageBox>
 
 #include <QtCore/QDate>
 #include <QtCore/QTime>
@@ -21,30 +42,80 @@
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 
-QNcidNotify::QNcidNotify ( QWidget *parent ) : QWidget ( parent ), connected(false)
+QNcidNotify::QNcidNotify() : connected(false)
 {
-    ncidHostIP = "192.168.1.1";
-    ncidHostPort = 3333;
-    lookupUrl = "";
-
-    sock = new QTcpSocket;
-    sock->connectToHost (ncidHostIP, ncidHostPort, QIODevice::ReadOnly );
-
+    settings = new QSettings;
+    loadConfiguration();
     log = new QList<LogEntry>();
 
     trayIcon = new QSystemTrayIcon;
     trayIcon->setIcon(QIcon(":/phone-icon.svg"));
     trayIcon->show();
 
-    connect ( sock, SIGNAL ( readyRead() ), this, SLOT ( readData() ) );
-    connect ( this, SIGNAL ( lineRead ( QString ) ), this, SLOT ( parseLine ( QString ) ) );
-}
+    context = new QMenu(tr("QNcidNotify"));
 
+    QAction *optAct = new QAction(tr("&Options"), this);
+    optAct->setShortcuts(QKeySequence::Open);
+    optAct->setStatusTip(tr("Open an existing file"));
+    connect(optAct, SIGNAL(triggered()), this, SLOT(optAct()));
+    context->addAction(optAct);
+
+    QAction *exitAct = new QAction(tr("E&xit"), this);
+    exitAct->setShortcuts(QKeySequence::Quit);
+    exitAct->setStatusTip(tr("Exit the application"));
+    connect(exitAct, SIGNAL(triggered()), this, SLOT(exitAct()));
+    context->addAction(exitAct);
+
+    trayIcon->setContextMenu(context);
+
+    sock = new QTcpSocket;
+    sock->connectToHost (ncidHostIP, ncidHostPort, QIODevice::ReadOnly );
+    connect(sock, SIGNAL(readyRead()), this, SLOT(readData()));
+    connect(this, SIGNAL(lineRead(QString)), this, SLOT(parseLine(QString)));
+
+    if (!sock->waitForConnected(1000)) {
+        QMessageBox::warning(0, tr("Connection Error"), tr("Cannot not connect to ncid server (%1:%2)").arg(ncidHostIP).arg(ncidHostPort));
+    }
+}
 
 QNcidNotify::~QNcidNotify()
 {
-    if ( sock->isOpen() ) sock->disconnectFromHost();
+    context->deleteLater();
+    if ( sock->isOpen() ) {
+        sock->disconnectFromHost();
+        sock->deleteLater();
+    }
 }
+
+void QNcidNotify::loadConfiguration()
+{
+    ncidHostIP = settings->value("ncidserver/ip","192.168.1.1").toString();
+    ncidHostPort = settings->value("ncidserver/port",3333).toInt();
+    lookupUrl = settings->value("lookup/url","").toString();
+    lookupState = settings->value("lookup/state", false).toBool();
+}
+
+void QNcidNotify::optAct()
+{
+    QNcidNotifyOptions *o = new QNcidNotifyOptions(settings);
+    int ret = o->exec();
+    if (ret == QDialog::Accepted) {
+        settings->setValue("ncidserver/ip", o->server->displayText());
+        settings->setValue("ncidserver/port", o->port->value());
+        settings->setValue("lookup/url", o->lookupurl->displayText());
+        settings->setValue("lookup/state", (o->lookup->checkState() == Qt::Checked));
+        settings->sync();
+        loadConfiguration();
+    }
+    o->close();
+    o->deleteLater();
+}
+
+void QNcidNotify::exitAct()
+{
+    emit quit();
+}
+
 
 /**
  * reads one line from the ncid server
@@ -60,7 +131,7 @@ void QNcidNotify::readData()
 /**
  * Checks for type of line recived from ncid server and hands
  * it over to the line specific parsing function.
- * 
+ *
  * @param line The line to parse
  */
 void QNcidNotify::parseLine ( QString line )
@@ -87,7 +158,7 @@ void QNcidNotify::parseLine ( QString line )
  * Parses CID and CIDLOG lines with the following format:
  * CID: *DATE*18052012*TIME*1743*LINE*0123456789*NMBR*0987654321*MESG*NONE*NAME*NO NAME*
  * CIDLOG: *DATE*11052012*TIME*1331*LINE*0123456789*NMBR*Anonym*MESG*NONE*NAME*NO NAME*
- * 
+ *
  * @param line The line to parse
  */
 void QNcidNotify::parseCID(QString line)
@@ -129,7 +200,7 @@ void QNcidNotify::parseCID(QString line)
 
 /**
  * Converts the LogEntry struct into a string
- * 
+ *
  * @param entry The log entry
  * @return the generated string
  */
@@ -145,11 +216,11 @@ QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
  * Generate the Notification text the the log entry
  *  * If the notification text for the number is already cached
  *    in the sqlite database, the cached version is used.
- *  * If no cached version is found but an url to look the text found 
+ *  * If no cached version is found but an url to look the text found
  *    is given in the configuration, the text is recived from this webpage.
  *  * If no cache exists and no url is given the notification is generated
  *    by lotEntryToString()
- * 
+ *
  * @param entry the log entry
  * @return the notification text
  */
@@ -167,7 +238,7 @@ QString QNcidNotify::getCallerInfo(const QNcidNotify::LogEntry entry)
     if (query.first()) {
         callerInfo = query.value(0).toString();
     }
-    else if (!lookupUrl.isEmpty()) {
+    else if (lookupState && !lookupUrl.isEmpty()) {
         QNetworkAccessManager *networkMgr = new QNetworkAccessManager(this);
         QNetworkReply *reply = networkMgr->get( QNetworkRequest( QUrl( lookupUrl + entry.callerId) ) );
         QEventLoop loop;
@@ -182,6 +253,10 @@ QString QNcidNotify::getCallerInfo(const QNcidNotify::LogEntry entry)
     }
     else {
         callerInfo = logEntryToString(entry);
+        query.prepare("INSERT INTO numbercache (number, notification) VALUES(?,?)");
+        query.addBindValue(entry.callerId);
+        query.addBindValue(callerInfo);
+        query.exec();
     }
     db.close();
     return callerInfo;
@@ -189,7 +264,7 @@ QString QNcidNotify::getCallerInfo(const QNcidNotify::LogEntry entry)
 
 /**
  * Shows a notification using the freedesktop.org DBus notification API
- * 
+ *
  * @param msg the message to show
  * @param timeout time to display the notification
  *                (if -1 the timeout is given by the window system)
