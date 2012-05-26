@@ -34,17 +34,18 @@ QNcidLogDialog::QNcidLogDialog(QSqlDatabase db, QWidget* parent, Qt::WindowFlags
     QSqlTableModel *model = new QSqlTableModel(this, db);
     model->setTable("calllog");
     model->setEditStrategy(QSqlTableModel::OnManualSubmit);
+    model->setSort(2, Qt::DescendingOrder);
     model->select();
-    model->setHeaderData(0, Qt::Horizontal, tr("Number"));
-    model->setHeaderData(1, Qt::Horizontal, tr("Time"));
+    model->setHeaderData(1, Qt::Horizontal, tr("Number"));
+    model->setHeaderData(2, Qt::Horizontal, tr("Time"));
 
     QTableView *view = new QTableView;
     view->setModel(model);
     view->setEditTriggers(QAbstractItemView::NoEditTriggers); 
     view->hideColumn(0); // don't show the ID
-    view->hideColumn(2); // don't show the line
-    view->hideColumn(3); // don't show the message
-    view->hideColumn(4); // don't show the name
+    view->hideColumn(3); // don't show the line
+    view->hideColumn(4); // don't show the message
+    view->hideColumn(5); // don't show the name
     view->show();
 
     vl->addWidget(view);
