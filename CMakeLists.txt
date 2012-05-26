@@ -14,7 +14,7 @@ set(DATADIR "${CMAKE_INSTALL_PREFIX}/share")
 configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 qt4_add_resources(QNcidNotify_RCC QNcidNotify.qrc)
    
-set(QNcidNotify_SRCS QNcidNotifyOptions.cpp main.cpp QNcidNotify.cpp ${QNcidNotify_RCC})
+set(QNcidNotify_SRCS QNcidSocket.cpp QNcidNotifyOptions.cpp main.cpp QNcidNotify.cpp ${QNcidNotify_RCC})
 qt4_automoc(${QNcidNotify_SRCS})
 add_executable(qncidnotify ${QNcidNotify_SRCS} )
 target_link_libraries(qncidnotify ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY} ${QT_QTNETWORK_LIBRARY} ${QT_QTSQL_LIBRARY} ${QT_QTDBUS_LIBRARY})

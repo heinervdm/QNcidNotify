@@ -19,6 +19,8 @@
 #ifndef QNcidNotify_H
 #define QNcidNotify_H
 
+#include "QNcidSocket.h"
+
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QStringList>
@@ -36,36 +38,30 @@ class QNcidNotify : public QObject
 public:
     QNcidNotify ();
     virtual ~QNcidNotify();
+
 private:
-    struct LogEntry {
-        QDateTime date;
-        QString callerId;
-        QString phoneLine;
-        QString msg;
-        QString name;
-    };
     QSettings *settings;
     QMenu *context;
-    QList<LogEntry> *log;
     QSystemTrayIcon *trayIcon;
-    QWidget *m_widget;
-    QTcpSocket *sock;
-    QString lookupUrl;
-    QString ncidHostIP;
+    QNcidSocket *sock;
+    QString lookupUrl, ncidHostIP, logDb;
     int ncidHostPort;
-    void parseCID(const QString line);
-    bool connected, lookupState;
-    static QString logEntryToString(const LogEntry entry);
-    QString getCallerInfo(const LogEntry entry);
+    bool lookupState, connected;
+
+    QString getCallerInfo(const QNcidSocket::LogEntry entry);
+    void connectToNcidServer();
+
 private slots:
-    void readData();
-    void parseLine(QString line);
+    void logCall(const QNcidSocket::LogEntry);
     void showNotification(const QString msg, int timeout = -1);
-    void optAct();
     void loadConfiguration();
+    void newCall(const QNcidSocket::LogEntry);
+    void ncidServerConnected(bool);
+    void optAct();
     void exitAct();
+    void logAct();
+
 signals:
-    void lineRead(QString line);
     void quit();
 };
 

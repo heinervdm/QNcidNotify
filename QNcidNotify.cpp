@@ -46,7 +46,6 @@ QNcidNotify::QNcidNotify() : connected(false)
 {
     settings = new QSettings;
     loadConfiguration();
-    log = new QList<LogEntry>();
 
     trayIcon = new QSystemTrayIcon;
     trayIcon->setIcon(QIcon(":/phone-icon.svg"));
@@ -56,9 +55,15 @@ QNcidNotify::QNcidNotify() : connected(false)
 
     QAction *optAct = new QAction(tr("&Options"), this);
     optAct->setShortcuts(QKeySequence::Open);
-    optAct->setStatusTip(tr("Open an existing file"));
+    optAct->setStatusTip(tr("Shows the configuration dialog"));
     connect(optAct, SIGNAL(triggered()), this, SLOT(optAct()));
     context->addAction(optAct);
+
+    QAction *logAct = new QAction(tr("Call &Log"), this);
+    logAct->setShortcuts(QKeySequence::Open);
+    logAct->setStatusTip(tr("Shows the call log"));
+    connect(logAct, SIGNAL(triggered()), this, SLOT(logAct()));
+    context->addAction(logAct);
 
     QAction *exitAct = new QAction(tr("E&xit"), this);
     exitAct->setShortcuts(QKeySequence::Quit);
@@ -68,14 +73,7 @@ QNcidNotify::QNcidNotify() : connected(false)
 
     trayIcon->setContextMenu(context);
 
-    sock = new QTcpSocket;
-    sock->connectToHost (ncidHostIP, ncidHostPort, QIODevice::ReadOnly );
-    connect(sock, SIGNAL(readyRead()), this, SLOT(readData()));
-    connect(this, SIGNAL(lineRead(QString)), this, SLOT(parseLine(QString)));
-
-    if (!sock->waitForConnected(1000)) {
-        QMessageBox::warning(0, tr("Connection Error"), tr("Cannot not connect to ncid server (%1:%2)").arg(ncidHostIP).arg(ncidHostPort));
-    }
+    connectToNcidServer();
 }
 
 QNcidNotify::~QNcidNotify()
@@ -87,12 +85,23 @@ QNcidNotify::~QNcidNotify()
     }
 }
 
+void QNcidNotify::ncidServerConnected(bool c)
+{
+    connected = c;
+}
+
 void QNcidNotify::loadConfiguration()
 {
     ncidHostIP = settings->value("ncidserver/ip","192.168.1.1").toString();
     ncidHostPort = settings->value("ncidserver/port",3333).toInt();
     lookupUrl = settings->value("lookup/url","").toString();
     lookupState = settings->value("lookup/state", false).toBool();
+    logDb = "test.db";
+}
+
+void QNcidNotify::logAct()
+{
+
 }
 
 void QNcidNotify::optAct()
@@ -100,12 +109,17 @@ void QNcidNotify::optAct()
     QNcidNotifyOptions *o = new QNcidNotifyOptions(settings);
     int ret = o->exec();
     if (ret == QDialog::Accepted) {
+        QString oldServer = ncidHostIP;
+        int oldPort = ncidHostPort;
         settings->setValue("ncidserver/ip", o->server->displayText());
         settings->setValue("ncidserver/port", o->port->value());
         settings->setValue("lookup/url", o->lookupurl->displayText());
         settings->setValue("lookup/state", (o->lookup->checkState() == Qt::Checked));
         settings->sync();
         loadConfiguration();
+        if (oldPort != ncidHostPort || !oldServer.compare(ncidHostIP)) {
+            connectToNcidServer();
+        }
     }
     o->close();
     o->deleteLater();
@@ -116,100 +130,50 @@ void QNcidNotify::exitAct()
     emit quit();
 }
 
-
-/**
- * reads one line from the ncid server
- */
-void QNcidNotify::readData()
+void QNcidNotify::connectToNcidServer()
 {
-    int size = 1024;
-    char data[size];
-    sock->readLine ( data, size );
-    emit lineRead ( QString ( data ) );
-}
+    if (sock) {
+        sock->close();
+        delete sock;
+        connected = false;
+    }
+    sock = new QNcidSocket;
+    sock->connectToHost (ncidHostIP, ncidHostPort, QIODevice::ReadOnly );
+    connect(sock, SIGNAL(readyRead()), this, SLOT(readData()));
+    connect(sock, SIGNAL(newLogEntry(QNcidSocket::LogEntry)), this, SLOT(logCall(QNcidSocket::LogEntry)));
+    connect(sock, SIGNAL(incommingCall(QNcidSocket::LogEntry)), this, SLOT(newCall(QNcidSocket::LogEntry)));
 
-/**
- * Checks for type of line recived from ncid server and hands
- * it over to the line specific parsing function.
- *
- * @param line The line to parse
- */
-void QNcidNotify::parseLine ( QString line )
-{
-    line = line.simplified();
-    qDebug() << "parseLine():" << line;
-    if ( line.startsWith ( "200" ) ) {
-        connected = true;
-    } else if ( line.startsWith ( "300" ) ) {
-        // end of call log
-    } else if ( line.startsWith ( "CIDLOG:" ) ) {
-        parseCID(line);
-    } else if ( line.startsWith ( "CIDINFO:" ) ) {
-        // ringing
-    } else if ( line.startsWith ( "CID:" ) ) {
-        parseCID(line);
-    } else {
-        // not handeled
+    if (!sock->waitForConnected(1000)) {
+        QMessageBox::warning(0, tr("Connection Error"), tr("Cannot not connect to ncid server (%1:%2)").arg(ncidHostIP).arg(ncidHostPort));
     }
 }
 
-
-/**
- * Parses CID and CIDLOG lines with the following format:
- * CID: *DATE*18052012*TIME*1743*LINE*0123456789*NMBR*0987654321*MESG*NONE*NAME*NO NAME*
- * CIDLOG: *DATE*11052012*TIME*1331*LINE*0123456789*NMBR*Anonym*MESG*NONE*NAME*NO NAME*
- *
- * @param line The line to parse
- */
-void QNcidNotify::parseCID(QString line)
+void QNcidNotify::newCall(const QNcidSocket::LogEntry entry)
 {
-    LogEntry entry;
-    QDate date = QDate(0,0,0);
-    QTime time = QTime(0,0);
-    QStringList f = line.split("*");
-    for (int i=1; i<f.length()-1; i+=2) {
-        if (f[i].compare("DATE",Qt::CaseInsensitive) == 0) {
-            date.setDate(f[i+1].right(4).toInt(),f[i+1].mid(2,2).toInt(),f[i+1].left(2).toInt());
-        }
-        else if (f[i].compare("TIME",Qt::CaseInsensitive) == 0) {
-            time = QTime::fromString(f[i+1],"hhmm");
-        }
-        else if (f[i].compare("LINE",Qt::CaseInsensitive) == 0) {
-            entry.phoneLine = f[i+1];
-        }
-        else if (f[i].compare("NMBR",Qt::CaseInsensitive) == 0) {
-            entry.callerId = f[i+1];
-        }
-        else if (f[i].compare("NAME",Qt::CaseInsensitive) == 0) {
-            entry.name = f[i+1];
-        }
-        else if (f[i].compare("MESG",Qt::CaseInsensitive) == 0) {
-            entry.msg = f[i+1];
-        }
-        else {
-            qDebug() << "parseCID(): Unkown part:" << f[i+1];
-        }
-    }
-    entry.date = QDateTime(date, time);
-    log->append(entry);
-
-    qDebug() << "parseCID(): Number:" << entry.callerId << "Time:" << entry.date.toString();
-
-    if (line.startsWith("CID:",Qt::CaseInsensitive)) showNotification(getCallerInfo(entry));
+    showNotification(getCallerInfo(entry));
 }
 
-/**
- * Converts the LogEntry struct into a string
- *
- * @param entry The log entry
- * @return the generated string
- */
-QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
+void QNcidNotify::logCall(const QNcidSocket::LogEntry entry)
 {
-    QString msg;
-    msg = tr("Number: ") + entry.callerId + "<br>" + tr("Time: ") + entry.date.toString();
-
-    return msg;
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(logDb);
+    if (!db.open()) return;
+    QSqlQuery query;
+    query.exec("CREATE TABLE IF NOT EXISTS calllog (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT NOT NULL, time TEXT NOT NULL, line TEXT, message TEXT, name TEXT)");
+    query.prepare("SELECT id FROM calllog WHERE number=? AND time=?;");
+    query.addBindValue(entry.callerId);
+    query.addBindValue(entry.date.toString(Qt::ISODate));
+    query.exec();
+    if (!query.first()) {
+        query.prepare("INSERT INTO calllog (number, time,line, message, name) VALUES(?,?,?,?,?)");
+        query.addBindValue(entry.callerId);
+        query.addBindValue(entry.date.toString(Qt::ISODate));
+        query.addBindValue(entry.phoneLine);
+        query.addBindValue(entry.msg);
+        query.addBindValue(entry.name);
+        query.exec();
+    }
+    db.close();
 }
 
 /**
@@ -224,11 +188,11 @@ QString QNcidNotify::logEntryToString(const QNcidNotify::LogEntry entry)
  * @param entry the log entry
  * @return the notification text
  */
-QString QNcidNotify::getCallerInfo(const QNcidNotify::LogEntry entry)
+QString QNcidNotify::getCallerInfo(const QNcidSocket::LogEntry entry)
 {
     QString callerInfo;
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName("test.db");
+    db.setDatabaseName(logDb);
     if (!db.open()) return NULL;
     QSqlQuery query;
     query.exec("CREATE TABLE IF NOT EXISTS numbercache (number TEXT PRIMARY KEY, notification TEXT NOT NULL)");
@@ -245,14 +209,14 @@ QString QNcidNotify::getCallerInfo(const QNcidNotify::LogEntry entry)
         QObject::connect(reply, SIGNAL(readyRead()), &loop, SLOT(quit()));
         loop.exec();
         callerInfo = QString(reply->readAll().data());
-        if (callerInfo.isEmpty()) callerInfo = logEntryToString(entry);
+        if (callerInfo.isEmpty()) callerInfo = QNcidSocket::logEntryToString(entry);
         query.prepare("INSERT INTO numbercache (number, notification) VALUES(?,?)");
         query.addBindValue(entry.callerId);
         query.addBindValue(callerInfo);
         query.exec();
     }
     else {
-        callerInfo = logEntryToString(entry);
+        callerInfo = QNcidSocket::logEntryToString(entry);
         query.prepare("INSERT INTO numbercache (number, notification) VALUES(?,?)");
         query.addBindValue(entry.callerId);
         query.addBindValue(callerInfo);
