@@ -22,6 +22,11 @@
 
 #include <QtCore/QStringList>
 
+QNcidSocket::QNcidSocket(QObject* parent): QTcpSocket(parent)
+{
+    connect(this, SIGNAL(readyRead()), this, SLOT(readData()));
+}
+
 /**
  * reads one line from the ncid server
  */
@@ -29,7 +34,7 @@ void QNcidSocket::readData()
 {
     int size = 1024;
     char data[size];
-    sock->readLine (data, size);
+    this->readLine (data, size);
     parseLine(QString(data));
 }
 

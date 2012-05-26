@@ -16,8 +16,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef QNCIDNOTIFYOPTIONS_H
-#define QNCIDNOTIFYOPTIONS_H
+#ifndef QNCIDOPTIONSDIALOG_H
+#define QNCIDOPTIONSDIALOG_H
 
 #include <QtGui/QDialog>
 #include <QtGui/QLineEdit>
@@ -26,11 +26,11 @@
 
 #include <QtCore/QSettings>
 
-class QNcidNotifyOptions : public QDialog
+class QNcidOptionsDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit QNcidNotifyOptions(QSettings *settings = 0, QWidget* parent = 0, Qt::WindowFlags f = 0);
+    explicit QNcidOptionsDialog(QSettings *settings = 0, QWidget* parent = 0, Qt::WindowFlags f = 0);
     QLineEdit *server, *lookupurl;
     QSpinBox *port;
     QCheckBox *lookup;
@@ -38,4 +38,4 @@ signals:
     void configurationChanged();
 };
 
-#endif // QNCIDNOTIFYOPTIONS_H
+#endif // QNCIDOPTIONSDIALOG_H

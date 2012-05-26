@@ -20,7 +20,8 @@
 #include "QNcidNotify.moc"
 
 #include "config.h"
-#include "QNcidNotifyOptions.h"
+#include "QNcidOptionsDialog.h"
+#include "QNcidLogDialog.h"
 
 #include <QtDBus/QDBusInterface>
 
@@ -79,34 +80,37 @@ QNcidNotify::QNcidNotify() : connected(false)
 QNcidNotify::~QNcidNotify()
 {
     context->deleteLater();
-    if ( sock->isOpen() ) {
-        sock->disconnectFromHost();
-        sock->deleteLater();
+    if (sock->isOpen()) {
+        sock->close();
     }
 }
 
+/**
+ * Sets internal connection status to the Ncid server
+ */
 void QNcidNotify::ncidServerConnected(bool c)
 {
     connected = c;
 }
 
+/**
+ * Load the application configuration from QSettings
+ */
 void QNcidNotify::loadConfiguration()
 {
     ncidHostIP = settings->value("ncidserver/ip","192.168.1.1").toString();
     ncidHostPort = settings->value("ncidserver/port",3333).toInt();
     lookupUrl = settings->value("lookup/url","").toString();
     lookupState = settings->value("lookup/state", false).toBool();
-    logDb = "test.db";
+    logDb = settings->value("lookup/db","test.db").toString();
 }
 
-void QNcidNotify::logAct()
-{
-
-}
-
+/**
+ * Opens the options dialog, called by the options button of the context menu
+ */
 void QNcidNotify::optAct()
 {
-    QNcidNotifyOptions *o = new QNcidNotifyOptions(settings);
+    QNcidOptionsDialog *o = new QNcidOptionsDialog(settings);
     int ret = o->exec();
     if (ret == QDialog::Accepted) {
         QString oldServer = ncidHostIP;
@@ -125,34 +129,69 @@ void QNcidNotify::optAct()
     o->deleteLater();
 }
 
+/**
+ * Opens the call log dialog, called by to Log button of the context menu
+ */
+void QNcidNotify::logAct()
+{
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(logDb);
+    if (!db.open()) {
+        QMessageBox::warning(0, tr("Database Connection Error"), tr("Can not connect to database %1.").arg(logDb));
+    }
+    else {
+        QNcidLogDialog *o = new QNcidLogDialog(db);
+        o->exec();
+        o->close();
+        o->deleteLater();
+        db.close();
+    }
+}
+
+/**
+ * Exits the Application, called by the Exit Button of the context menu
+ */
 void QNcidNotify::exitAct()
 {
     emit quit();
 }
 
+/**
+ * Opens the connection to the Ncid server
+ */
 void QNcidNotify::connectToNcidServer()
 {
-    if (sock) {
-        sock->close();
-        delete sock;
-        connected = false;
-    }
+//     if (sock) {
+//         sock->close();
+//         sock->deleteLater();
+//         connected = false;
+//     }
+
     sock = new QNcidSocket;
     sock->connectToHost (ncidHostIP, ncidHostPort, QIODevice::ReadOnly );
-    connect(sock, SIGNAL(readyRead()), this, SLOT(readData()));
     connect(sock, SIGNAL(newLogEntry(QNcidSocket::LogEntry)), this, SLOT(logCall(QNcidSocket::LogEntry)));
     connect(sock, SIGNAL(incommingCall(QNcidSocket::LogEntry)), this, SLOT(newCall(QNcidSocket::LogEntry)));
 
     if (!sock->waitForConnected(1000)) {
-        QMessageBox::warning(0, tr("Connection Error"), tr("Cannot not connect to ncid server (%1:%2)").arg(ncidHostIP).arg(ncidHostPort));
+        QMessageBox::warning(0, tr("Ncid Server Connection Error"), tr("Cannot not connect to ncid server (%1:%2)").arg(ncidHostIP).arg(ncidHostPort));
     }
 }
 
+/**
+ * Show notification about new incomming call
+ * 
+ * @param entry the call information
+ */
 void QNcidNotify::newCall(const QNcidSocket::LogEntry entry)
 {
     showNotification(getCallerInfo(entry));
 }
 
+/**
+ * Stores a call in the log database, if it is not already stored
+ * 
+ * @param entry the call information
+ */
 void QNcidNotify::logCall(const QNcidSocket::LogEntry entry)
 {
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");

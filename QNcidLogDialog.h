@@ -17,43 +17,19 @@
 */
 
 
-#ifndef QNCIDSOCKET_H
-#define QNCIDSOCKET_H
+#ifndef QNCIDLOGDIALOG_H
+#define QNCIDLOGDIALOG_H
 
-#include <QtNetwork/QTcpSocket>
+#include <QtCore/QSettings>
 
-#include <QtCore/QString>
-#include <QtCore/QDateTime>
+#include <QtGui/QDialog>
+#include <QSqlDatabase>
 
-class QNcidSocket : public QTcpSocket
+class QNcidLogDialog : public QDialog
 {
-    Q_OBJECT
+Q_OBJECT
 public:
-    struct LogEntry {
-        QDateTime date;
-        QString callerId;
-        QString phoneLine;
-        QString msg;
-        QString name;
-    };
-
-    explicit QNcidSocket(QObject* parent = 0);
-    static QString logEntryToString(const QNcidSocket::LogEntry);
-
-private:
-    QString ncidHostIP;
-    int ncidHostPort;
-
-    void parseCID(const QString);
-    void parseLine(QString);
-
-private slots:
-    void readData();
-
-signals:
-    void connected(bool);
-    void newLogEntry(const QNcidSocket::LogEntry);
-    void incommingCall(const QNcidSocket::LogEntry);
+    explicit QNcidLogDialog(QSqlDatabase db, QWidget* parent = 0, Qt::WindowFlags f = 0);
 };
 
-#endif // QNCIDSOCKET_H
+#endif // QNCIDLOGDIALOG_H

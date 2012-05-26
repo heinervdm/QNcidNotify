@@ -16,8 +16,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "QNcidNotifyOptions.h"
-#include "QNcidNotifyOptions.moc"
+#include "QNcidOptionsDialog.h"
+#include "QNcidOptionsDialog.moc"
 
 #include <QtGui/QWidget>
 #include <QtGui/QDialogButtonBox>
@@ -27,7 +27,7 @@
 #include <QtGui/QPushButton>
 #include <QtGui/QGroupBox>
 
-QNcidNotifyOptions::QNcidNotifyOptions(QSettings *settings, QWidget* parent, Qt::WindowFlags f) : QDialog(parent)
+QNcidOptionsDialog::QNcidOptionsDialog(QSettings *settings, QWidget* parent, Qt::WindowFlags f) : QDialog(parent, f)
 {
     if (!settings) settings = new QSettings;
 
