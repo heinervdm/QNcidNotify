@@ -32,6 +32,8 @@
 #include <QtGui/QSystemTrayIcon>
 #include <QtGui/QMenu>
 
+#include <QtSql/QSqlDatabase>
+
 class QNcidNotify : public QObject
 {
     Q_OBJECT
@@ -47,6 +49,7 @@ private:
     QString lookupUrl, ncidHostIP, logDb;
     int ncidHostPort;
     bool lookupState, connected;
+    QSqlDatabase db;
 
     QString getCallerInfo(const QNcidSocket::LogEntry entry);
     void connectToNcidServer();

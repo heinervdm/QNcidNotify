@@ -36,6 +36,7 @@ void QNcidSocket::readData()
     char data[size];
     this->readLine (data, size);
     parseLine(QString(data));
+    if (this->canReadLine()) readData();
 }
 
 /**

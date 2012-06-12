@@ -74,6 +74,12 @@ QNcidNotify::QNcidNotify() : connected(false)
 
     trayIcon->setContextMenu(context);
 
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(logDb);
+    if (!db.open()) {
+        QMessageBox::warning(0, tr("Database Connection Error"), tr("Can not connect to database %1.").arg(logDb));
+    }
+
     connectToNcidServer();
 }
 
@@ -82,6 +88,9 @@ QNcidNotify::~QNcidNotify()
     context->deleteLater();
     if (sock->isOpen()) {
         sock->close();
+    }
+    if (db.isOpen()) {
+        db.close();
     }
 }
 
@@ -134,18 +143,10 @@ void QNcidNotify::optAct()
  */
 void QNcidNotify::logAct()
 {
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(logDb);
-    if (!db.open()) {
-        QMessageBox::warning(0, tr("Database Connection Error"), tr("Can not connect to database %1.").arg(logDb));
-    }
-    else {
-        QNcidLogDialog *o = new QNcidLogDialog(db);
-        o->exec();
-        o->close();
-        o->deleteLater();
-        db.close();
-    }
+    QNcidLogDialog *o = new QNcidLogDialog(db);
+    o->exec();
+    o->close();
+    o->deleteLater();
 }
 
 /**
@@ -174,12 +175,13 @@ void QNcidNotify::connectToNcidServer()
 
     if (!sock->waitForConnected(1000)) {
         QMessageBox::warning(0, tr("Ncid Server Connection Error"), tr("Cannot not connect to ncid server (%1:%2)").arg(ncidHostIP).arg(ncidHostPort));
+        sock->deleteLater();
     }
 }
 
 /**
  * Show notification about new incomming call
- * 
+ *
  * @param entry the call information
  */
 void QNcidNotify::newCall(const QNcidSocket::LogEntry entry)
@@ -189,14 +191,11 @@ void QNcidNotify::newCall(const QNcidSocket::LogEntry entry)
 
 /**
  * Stores a call in the log database, if it is not already stored
- * 
+ *
  * @param entry the call information
  */
 void QNcidNotify::logCall(const QNcidSocket::LogEntry entry)
 {
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(logDb);
-    if (!db.open()) return;
     QSqlQuery query;
     query.exec("CREATE TABLE IF NOT EXISTS calllog (id INTEGER PRIMARY KEY AUTOINCREMENT, number TEXT NOT NULL, time TEXT NOT NULL, line TEXT, message TEXT, name TEXT)");
     query.prepare("SELECT id FROM calllog WHERE number=? AND time=?;");
@@ -212,7 +211,6 @@ void QNcidNotify::logCall(const QNcidSocket::LogEntry entry)
         query.addBindValue(entry.name);
         query.exec();
     }
-    db.close();
 }
 
 /**
@@ -230,9 +228,6 @@ void QNcidNotify::logCall(const QNcidSocket::LogEntry entry)
 QString QNcidNotify::getCallerInfo(const QNcidSocket::LogEntry entry)
 {
     QString callerInfo;
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(logDb);
-    if (!db.open()) return NULL;
     QSqlQuery query;
     query.exec("CREATE TABLE IF NOT EXISTS numbercache (number TEXT PRIMARY KEY, notification TEXT NOT NULL)");
     query.prepare("SELECT notification FROM numbercache WHERE number=?;");
@@ -261,7 +256,6 @@ QString QNcidNotify::getCallerInfo(const QNcidSocket::LogEntry entry)
         query.addBindValue(callerInfo);
         query.exec();
     }
-    db.close();
     return callerInfo;
 }
 
